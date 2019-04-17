@@ -16,7 +16,7 @@ from sklearn.linear_model import SGDRegressor, ElasticNet
 from lenskit import util
 from .. import check
 from ..matrix import CSR, sparse_ratings
-from . import Recommender, CandidateSelector
+from . import Predictor
 
 _logger = logging.getLogger(__name__)
 
