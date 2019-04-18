@@ -46,4 +46,33 @@ def test_ii_init_warn_negative_regularization():
 
 def test_ii_train_smoke_test():
     algo = slim.SLIM()
-    algo.fit(ml_ratings)
+    algo.fit(simple_ratings)
+    #_log.info('Created sparse coefficient matrix %s', algo.coefficients_.todense())
+
+def test_ii_train():
+    algo = slim.SLIM(regularization=(.05, .1))
+    algo.fit(simple_ratings)
+
+    assert isinstance(algo.item_index_, pd.Index)
+    assert isinstance(algo.user_index_, pd.Index)
+    #assert isinstance(algo.coefficients_, scipy.linalg.csr_matrix)
+    
+    # 7 is associated with 9
+    seven, nine = algo.item_index_.get_indexer([7, 9])
+    _log.info('seven: %d', seven)
+    _log.info('nine: %d', nine)
+    assert algo.coefficients_[seven, nine] > 0
+
+    assert all(np.logical_not(np.isnan(algo.coefficients_.data)))
+    assert all(algo.coefficients_.diagonal() == 0)
+
+
+def test_ii_simple_predict():
+    algo = slim.SLIM(regularization=(.05, .1))
+    algo.fit(simple_ratings)
+
+    res = algo.predict_for_user(1, [7])
+    assert res is not None
+    assert len(res) == 1
+    assert 7 in res.index
+    assert not np.isnan(res.loc[7])

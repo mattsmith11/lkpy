@@ -49,7 +49,7 @@ class SLIM(Predictor):
         l_2_regularization(double): The l_2 regularization factor
     """
 
-    def __init__(self, regularization=(1.0, 2.0)):
+    def __init__(self, regularization=(.5, 1.0)):
         if isinstance(regularization, tuple):
             self.regularization = regularization
             self.l_1_regularization, self.l_2_regularization = regularization
@@ -88,37 +88,40 @@ class SLIM(Predictor):
         coeff_col = []
         coeff_values = []
 
+        rmat_copy = rmat.to_scipy().copy()
+
         for item in range(rmat.ncols):
-            sp_rmat = rmat.to_scipy()
+            sp_rmat = rmat_copy.copy()
             item_col = sp_rmat.getcol(item)
 
-            if (item % 100) == 0: _logger.info('[%s] computing coefficients for item %s', self._timer, item)
-            # Zero out the column of the item before optimizing to prevent the model
+            if (item % 100) == 0: _logger.info('[%s] computed coefficients for %s items', self._timer, item)
+                
+            # Zero out the column of the item before optimizing to prevent the model from optimizing for the item itself
             sp_rmat[sp_rmat[:, item].nonzero()[0], item] = 0
-            #assert sp_rmat.shape == rmat.to_scipy().shape
 
-            self.opt_model.fit(sp_rmat, item_col.toarray())
-            #self.opt_model.coef_[item] = 0
+            self.opt_model.fit(sp_rmat, item_col.todense())
             assert self.opt_model.coef_[item] == 0
 
+            #_logger.debug('[%s] created sparse coefficients %s for %s', self._timer, self.opt_model.coef_, item)
             # Remove negative coefficients to enforce positive relations and 0s for sparsity
-            for coefficient, index in enumerate(self.opt_model.coef_):
+            for index, coefficient  in enumerate(self.opt_model.coef_):
                 if coefficient > 0:
                     coeff_row.append(item)
                     coeff_col.append(index)
                     coeff_values.append(coefficient)
 
-
-        _logger.info('[%s] completed calculating coefficients', self._timer)
+        _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
 
         # Create sparse coefficient matrix 
-        row_ind = iidx.get_indexer(coeff_row).astype(np.int32)
-        col_ind = iidx.get_indexer(coeff_col).astype(np.int32)
+        row_ind = np.array(coeff_row, dtype=np.int32)
+        col_ind = np.array(coeff_col, dtype=np.int32)
         coeff_vals = np.require(coeff_values, np.float64)
+
         self.coefficients_ = CSR.from_coo(row_ind, col_ind, coeff_vals, (len(iidx), len(iidx))).to_scipy()
 
         self.user_index_ = uidx
         self.item_index_ = iidx
+        self.ratings_matrix_ = rmat
 
         return self
 
@@ -127,15 +130,30 @@ class SLIM(Predictor):
         Args:
             user: the user ID
             items (array-like): the items to predict
-            ratings (pandas.Series): the user's ratings (indexed by item id); if
-                                 provided, will be used to recompute the user's
-                                 bias at prediction time.
+            ratings (pandas.Series): NOT SUPPORTED
 
         Returns:
             pandas.Series: scores for the items, indexed by item id.
         """
+        _logger.debug('predicting %d item(s) for user %s', len(items), user)
 
-        return None
+        if ratings is not None:
+            _logger.debug('SLIM does not support ratings fit at predict time')
+            return pd.Series(np.nan, index=items)
+            
+        upos = self.user_index_.get_loc(user)
+        ipos = self.item_index_.get_indexer(items)
+        _logger.debug('Items %s have positions %s', items, ipos )
+
+        urow = np.ndarray((1,self.ratings_matrix_.ncols), buffer=self.ratings_matrix_.row_vs(upos))
+        #_logger.debug('User row shape %s and values %s', urow.shape, urow )
+        #_logger.debug('Item col shape %s and values %s', icol.shape, icol )        
+        scores = []
+        for i in ipos:
+            icol = self.coefficients_.getcol(i)
+            score = urow @ icol
+            _logger.debug('Predicted score for %s is %s', i, score)
+        return pd.Series(scores)
 
     def __str__(self):
         return 'SLIM(regularization_one={}, regularization_two={})'.format(self.regularization_one, self.regularization_two)
