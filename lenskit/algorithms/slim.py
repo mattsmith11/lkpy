@@ -138,7 +138,7 @@ class SLIM(Predictor):
 
         if ratings is not None:
             _logger.debug('SLIM does not support ratings fit at predict time')
-            return pd.Series(np.nan, index=items)
+            raise NotImplementedError()
             
         upos = self.user_index_.get_loc(user)
         ipos = self.item_index_.get_indexer(items)
