@@ -102,7 +102,6 @@ class SLIM(Predictor):
             self.opt_model.fit(sp_rmat, item_col.todense())
             assert self.opt_model.coef_[item] == 0
 
-            #_logger.debug('[%s] created sparse coefficients %s for %s', self._timer, self.opt_model.coef_, item)
             # Remove negative coefficients to enforce positive relations and 0s for sparsity
             for index, coefficient  in enumerate(self.opt_model.coef_):
                 if coefficient > 0:
@@ -143,17 +142,28 @@ class SLIM(Predictor):
             
         upos = self.user_index_.get_loc(user)
         ipos = self.item_index_.get_indexer(items)
-        _logger.debug('Items %s have positions %s', items, ipos )
 
-        urow = np.ndarray((1,self.ratings_matrix_.ncols), buffer=self.ratings_matrix_.row_vs(upos))
-        #_logger.debug('User row shape %s and values %s', urow.shape, urow )
-        #_logger.debug('Item col shape %s and values %s', icol.shape, icol )        
-        scores = []
+        if -1 is upos:
+            _logger.warn("The requested user was not in the original dataset")
+
+        if -1 in ipos:
+            _logger.warn("Some item ratings requested are for items missing from fit data set")
+
+        ipos = ipos[ipos >= 0]
+
+        _logger.debug('Items %s have positions %s in the coefficient matrix', items, ipos )
+
+        urow = self.ratings_matrix_.row(upos)
+        urow = np.reshape(urow, (-1, 1)).transpose()
+
+        raw_scores = (urow @ self.coefficients_[:, ipos])[0]
+        indexed_scores = {}
+        raw_scores_index = 0
         for i in ipos:
-            icol = self.coefficients_.getcol(i)
-            score = urow @ icol
-            _logger.debug('Predicted score for %s is %s', i, score)
-        return pd.Series(scores)
+            _logger.debug('Predicted score for %s is %s', i, raw_scores[raw_scores_index])
+            indexed_scores[self.item_index_[i]] = raw_scores[raw_scores_index]
+            raw_scores_index += 1
+        return pd.Series(indexed_scores)
 
     def __str__(self):
         return 'SLIM(regularization_one={}, regularization_two={})'.format(self.regularization_one, self.regularization_two)

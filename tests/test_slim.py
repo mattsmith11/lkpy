@@ -35,27 +35,30 @@ simple_ratings = pd.DataFrame.from_records([
     (3, 9, 4.0)
 ], columns=['user', 'item', 'rating'])
 
-def test_ii_init():
+def test_slim_init():
     algo = slim.SLIM()
 
-def test_ii_init_warn_negative_regularization():
+def test_slim_init_warn_negative_regularization():
     try:
         algo = slim.SLIM(-1)
     except ValueError:
         pass  # this is fine
 
-def test_ii_train_smoke_test():
+def test_slim_train_smoke_test():
     algo = slim.SLIM()
     algo.fit(simple_ratings)
-    #_log.info('Created sparse coefficient matrix %s', algo.coefficients_.todense())
 
-def test_ii_train():
+def test_slim_train():
     algo = slim.SLIM(regularization=(.05, .1))
     algo.fit(simple_ratings)
 
     assert isinstance(algo.item_index_, pd.Index)
     assert isinstance(algo.user_index_, pd.Index)
-    #assert isinstance(algo.coefficients_, scipy.linalg.csr_matrix)
+
+    # Diagonal of the coefficient matrix is 0 and there are some values
+    assert all(algo.coefficients_.diagonal() == 0)
+    assert all(np.logical_not(np.isnan(algo.coefficients_.data)))
+    assert len(algo.coefficients_.data) > 0
     
     # 7 is associated with 9
     seven, nine = algo.item_index_.get_indexer([7, 9])
@@ -63,15 +66,30 @@ def test_ii_train():
     _log.info('nine: %d', nine)
     assert algo.coefficients_[seven, nine] > 0
 
-    assert all(np.logical_not(np.isnan(algo.coefficients_.data)))
-    assert all(algo.coefficients_.diagonal() == 0)
-
-
-def test_ii_simple_predict():
+def test_slim_simple_predict():
     algo = slim.SLIM(regularization=(.05, .1))
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1, [7])
+
+    assert res is not None
+    assert len(res) == 1
+    assert 7 in res.index
+    assert not np.isnan(res.loc[7])
+
+def test_ii_train_big():
+    "Simple tests for bounded models"
+    algo = slim.SLIM(regularization=(.05, .1))
+    algo.fit(ml_ratings)
+
+    # Diagonal of the coefficient matrix is 0 and there are some values
+    assert all(algo.coefficients_.diagonal() == 0)
+    assert all(np.logical_not(np.isnan(algo.coefficients_.data)))
+    assert len(algo.coefficients_.data) > 0
+
+
+    res = algo.predict_for_user(1, [7])
+
     assert res is not None
     assert len(res) == 1
     assert 7 in res.index
