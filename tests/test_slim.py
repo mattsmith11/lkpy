@@ -77,7 +77,8 @@ def test_slim_simple_predict():
     assert 7 in res.index
     assert not np.isnan(res.loc[7])
 
-def test_ii_train_big():
+#@mark.skip()
+def test_slim_train_big():
     "Simple tests for bounded models"
     algo = slim.SLIM(regularization=(.05, .1))
     algo.fit(ml_ratings)
@@ -90,7 +91,7 @@ def test_ii_train_big():
 
     res = algo.predict_for_user(1, [7])
 
-    assert res is not None
+    assert res is None
     assert len(res) == 1
     assert 7 in res.index
     assert not np.isnan(res.loc[7])

@@ -67,8 +67,6 @@ class SLIM(Predictor):
         self.alpha = self.l_1_regularization + self.l_2_regularization
         self.l_1_ratio = self.l_1_regularization / self.alpha
 
-        self.opt_model = ElasticNet(alpha=self.alpha,l1_ratio=self.l_1_ratio,positive=True,fit_intercept=True,copy_X=False)
-
     def fit(self, data):
         """
         Run the optimization problem to learn W.
@@ -84,13 +82,16 @@ class SLIM(Predictor):
 
         rmat, uidx, iidx = sparse_ratings(data)
 
-        coeff_row = []
-        coeff_col = []
-        coeff_values = []
+        coeff_row = np.array([], dtype=np.int32)
+        coeff_col = np.array([], dtype=np.int32)
+        coeff_values = np.array([], dtype=np.float64)
 
         rmat_copy = rmat.to_scipy().copy()
 
         for item in range(rmat.ncols):
+            # Create an ElasticNet optimization function
+            opt_model = ElasticNet(alpha=self.alpha,l1_ratio=self.l_1_ratio,positive=True,fit_intercept=True,copy_X=False)
+
             sp_rmat = rmat_copy.copy()
             item_col = sp_rmat.getcol(item)
 
@@ -99,24 +100,24 @@ class SLIM(Predictor):
             # Zero out the column of the item before optimizing to prevent the model from optimizing for the item itself
             sp_rmat[sp_rmat[:, item].nonzero()[0], item] = 0
 
-            self.opt_model.fit(sp_rmat, item_col.todense())
-            assert self.opt_model.coef_[item] == 0
+            opt_model.fit(sp_rmat, item_col.todense())
+            assert opt_model.coef_[item] == 0
 
-            # Remove negative coefficients to enforce positive relations and 0s for sparsity
-            for index, coefficient  in enumerate(self.opt_model.coef_):
-                if coefficient > 0:
-                    coeff_row.append(item)
-                    coeff_col.append(index)
-                    coeff_values.append(coefficient)
+            # Indexes of coefficient array with positive values
+            sparse_coeff_coo = opt_model.sparse_coef_.tocoo() 
+            # Add coefficients with proper indexes for sparse matrix
+            coeff_row = np.append(coeff_row, np.full(sparse_coeff_coo.nnz, item))
+            coeff_col = np.append(coeff_col, sparse_coeff_coo.col)
+            coeff_values = np.append(coeff_values, sparse_coeff_coo.data)
 
-        _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
+        #_logger.info('[%s] 1 %s - 2 %s', self._timer, coeff_row, coeff_row2)
+        #_logger.info('[%s] 1 %s - 2 %s', self._timer, coeff_col, coeff_col2)
+        #_logger.info('[%s] 1 %s - 2 %s', self._timer, coeff_values, coeff_values2)
+
+        _logger.warn('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
 
         # Create sparse coefficient matrix 
-        row_ind = np.array(coeff_row, dtype=np.int32)
-        col_ind = np.array(coeff_col, dtype=np.int32)
-        coeff_vals = np.require(coeff_values, np.float64)
-
-        self.coefficients_ = CSR.from_coo(row_ind, col_ind, coeff_vals, (len(iidx), len(iidx))).to_scipy()
+        self.coefficients_ = CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
 
         self.user_index_ = uidx
         self.item_index_ = iidx
