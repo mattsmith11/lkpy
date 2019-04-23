@@ -108,7 +108,7 @@ class SLIM(Predictor):
             coeff_col = np.append(coeff_col, coeff_tuple[2])
             coeff_values = np.append(coeff_values, coeff_tuple[3])
 
-        _logger.warn('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
+        _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
 
         # Create sparse coefficient matrix 
         self.coefficients_ = CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
@@ -133,7 +133,7 @@ class SLIM(Predictor):
 
         if ratings is not None:
             _logger.debug('SLIM does not support ratings fit at predict time')
-            raise NotImplementedError()
+            raise NotImplementedError('SLIM does not support ratings fit at predict time')
             
         upos = self.user_index_.get_loc(user)
         ipos = self.item_index_.get_indexer(items)
