@@ -77,7 +77,7 @@ def test_slim_simple_predict():
     assert 7 in res.index
     assert not np.isnan(res.loc[7])
 
-#@mark.skip()
+@mark.skip("Redundant with the parallel test")
 def test_slim_train_big():
     "Simple tests for bounded models"
     algo = slim.SLIM(regularization=(.05, .1))
@@ -91,7 +91,25 @@ def test_slim_train_big():
 
     res = algo.predict_for_user(1, [7])
 
-    assert res is None
+    assert res is not None
+    assert len(res) == 1
+    assert 7 in res.index
+    assert not np.isnan(res.loc[7])
+
+def test_slim_train_big_parallel():
+    "Simple tests for bounded models"
+    algo = slim.SLIM(regularization=(.05, .1), nProcs=5)
+    algo.fit(ml_ratings)
+
+    # Diagonal of the coefficient matrix is 0 and there are some values
+    assert all(algo.coefficients_.diagonal() == 0)
+    assert all(np.logical_not(np.isnan(algo.coefficients_.data)))
+    assert len(algo.coefficients_.data) > 0
+
+
+    res = algo.predict_for_user(1, [7])
+
+    assert res is not None
     assert len(res) == 1
     assert 7 in res.index
     assert not np.isnan(res.loc[7])
