@@ -44,16 +44,21 @@ class SLIM(Predictor):
             If a tuple of 2 numbers is provided, the regularization factors will
             be applied to the l_1 and l_2 norms respectively.
 
+        binary(bool):
+            Determines if the SLIM algorithm should optimize using the passed in ratings values
+            or if the ratings should be transformed to binary ownership values. 
+        
         nprocs(int):
             Number of threads to use when fitting the data
 
     Attributes:
-        l_1_regularization(double): The l_1 regularization factor.
+        l_1_regularization(double): The l_1 regularization factor
         l_2_regularization(double): The l_2 regularization factor
-        nprocs: Number of threads to use when fitting the data
+        binary(bool): Indicates whether the rating column should be treated as ownership or rating scale
+        nprocs(int): Number of threads to use when fitting the data
     """
 
-    def __init__(self, regularization=(.5, 1.0), nprocs=1):
+    def __init__(self, regularization=(.5, 1.0), binary=False, nprocs=1):
         if isinstance(regularization, tuple):
             self.regularization = regularization
             self.l_1_regularization, self.l_2_regularization = regularization
@@ -62,13 +67,15 @@ class SLIM(Predictor):
             self.l_1_regularization = regularization
             self.l_2_regularization = regularization
 
+        self.binary = binary
         self.nprocs = int(nprocs)
 
         check.check_value(self.l_1_regularization >= 0, "l_1 norm regularization value {} must be nonnegative",
                           self.l_1_regularization)
         check.check_value(self.l_2_regularization >= 0, "l_2 norm regularization {} must be nonnegative",
                           self.l_2_regularization)
-
+        check.check_value(type(self.binary) == type(False), "Binary {} must be a boolean value",
+                          self.binary)
         check.check_value(self.nprocs > 0, "Number of processes {} must be a positive integer",
                           self.nprocs)
 
@@ -90,8 +97,11 @@ class SLIM(Predictor):
         """
         self._timer = util.Stopwatch()
 
-        rmat, uidx, iidx = sparse_ratings(data)
+        if self.binary:
+            data['rating'] = 1
 
+        rmat, uidx, iidx = sparse_ratings(data)
+        
         coeff_row = np.array([], dtype=np.int32)
         coeff_col = np.array([], dtype=np.int32)
         coeff_values = np.array([], dtype=np.float64)
