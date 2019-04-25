@@ -142,7 +142,7 @@ def test_slim_train_big():
 
 def test_slim_predict_big_parallel():
     "Simple tests for bounded models"
-    algo = slim.SLIM(regularization=(.05, .1), nProcs=5)
+    algo = slim.SLIM(regularization=(.05, .1), nprocs=5)
     algo.fit(ml_ratings)
 
     # Diagonal of the coefficient matrix is 0 and there are some values

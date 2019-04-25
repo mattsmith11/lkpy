@@ -44,16 +44,16 @@ class SLIM(Predictor):
             If a tuple of 2 numbers is provided, the regularization factors will
             be applied to the l_1 and l_2 norms respectively.
 
-        nProcs(int):
+        nprocs(int):
             Number of threads to use when fitting the data
 
     Attributes:
         l_1_regularization(double): The l_1 regularization factor.
         l_2_regularization(double): The l_2 regularization factor
-        nProcs: Number of threads to use when fitting the data
+        nprocs: Number of threads to use when fitting the data
     """
 
-    def __init__(self, regularization=(.5, 1.0), nProcs=1):
+    def __init__(self, regularization=(.5, 1.0), nprocs=1):
         if isinstance(regularization, tuple):
             self.regularization = regularization
             self.l_1_regularization, self.l_2_regularization = regularization
@@ -62,15 +62,15 @@ class SLIM(Predictor):
             self.l_1_regularization = regularization
             self.l_2_regularization = regularization
 
-        self.nProcs = int(nProcs)
+        self.nprocs = int(nprocs)
 
         check.check_value(self.l_1_regularization >= 0, "l_1 norm regularization value {} must be nonnegative",
                           self.l_1_regularization)
         check.check_value(self.l_2_regularization >= 0, "l_2 norm regularization {} must be nonnegative",
                           self.l_2_regularization)
 
-        check.check_value(self.nProcs > 0, "Number of processes {} must be a positive integer",
-                          self.nProcs)
+        check.check_value(self.nprocs > 0, "Number of processes {} must be a positive integer",
+                          self.nprocs)
 
 
         # Calculating alpha using the two regularization values
@@ -97,10 +97,7 @@ class SLIM(Predictor):
         coeff_values = np.array([], dtype=np.float64)
 
         # Optimize each item independently on different threads using joblib
-        item_coeff_array_tuples = Parallel(n_jobs=self.nProcs)(delayed(self._train_item)(item, rmat) for item in range(rmat.ncols))
-
-        # Create a structured array for easy indexing for rows/cols/data
-        # item_coeff_array_tuples = np.array(item_coeff_array_tuples, dtype=[('item', 'i4'), ('col', 'i4'), ('row', 'i4'), ('coeff', 'f8')])
+        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(self._train_item)(item, rmat) for item in range(rmat.ncols))
             
         for coeff_tuple in item_coeff_array_tuples:
             # Add coefficients with proper indexes for sparse matrix
@@ -155,26 +152,22 @@ class SLIM(Predictor):
             _logger.debug('Items %s have positions %s in the coefficient matrix', items, ipos )
             raw_scores = (urow @ self.coefficients_[:, ipos])[0]
 
-        
             raw_scores_index = 0
             for i in ipos:
                 _logger.debug('Predicted score for %s is %s', i, raw_scores[raw_scores_index])
                 indexed_scores[self.item_index_[i]] = raw_scores[raw_scores_index]
                 raw_scores_index += 1
             
-            
             res_series = pd.Series(indexed_scores)
 
         else:
             raw_scores = (urow @ self.coefficients_[:])[0]
-            _logger.warn("raw scores: %s", type(raw_scores))
             res_series = pd.Series(raw_scores, index = self.item_index_)
 
 
         return res_series
 
     def _train_item(self, item, rmat):
-        #_logger.info('[%s] computing coefficients for item %s', self._timer, item)
         # Create an ElasticNet optimization function
         opt_model = ElasticNet(alpha=self.alpha,l1_ratio=self.l_1_ratio,positive=True,fit_intercept=True,copy_X=False)
 
@@ -189,8 +182,6 @@ class SLIM(Predictor):
 
         # Indexes of coefficient array with positive values
         sparse_coeff_coo = opt_model.sparse_coef_.tocoo()
-
-        #_logger.info('[%s] Completed computing coefficients for item %s', self._timer, item)
         return (item,  np.full(sparse_coeff_coo.nnz, item), sparse_coeff_coo.col, sparse_coeff_coo.data)
 
     def __str__(self):
