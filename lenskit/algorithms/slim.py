@@ -98,10 +98,11 @@ class SLIM(Predictor):
         self._timer = util.Stopwatch()
 
         if self.binary:
+            data = data.copy(deep=True)
             data['rating'] = 1
 
         rmat, uidx, iidx = sparse_ratings(data)
-        
+
         coeff_row = np.array([], dtype=np.int32)
         coeff_col = np.array([], dtype=np.int32)
         coeff_values = np.array([], dtype=np.float64)
@@ -117,7 +118,8 @@ class SLIM(Predictor):
 
         _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
 
-        # Create sparse coefficient matrix 
+        # Create sparse coefficient matrix
+        #_logger.warn('[%s] Coefficient matrix %s cols, %s rows, %s values', self._timer, len(coeff_col), len(coeff_row), len(coeff_values))
         self.coefficients_ = CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
 
         self.user_index_ = uidx
