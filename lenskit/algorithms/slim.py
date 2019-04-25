@@ -158,11 +158,11 @@ class SLIM(Predictor):
                 indexed_scores[self.item_index_[i]] = raw_scores[raw_scores_index]
                 raw_scores_index += 1
             
-            res_series = pd.Series(indexed_scores)
+            res_series = pd.Series(indexed_scores, name='slim_score')
 
         else:
             raw_scores = (urow @ self.coefficients_[:])[0]
-            res_series = pd.Series(raw_scores, index = self.item_index_)
+            res_series = pd.Series(raw_scores, name='slim_score', index=self.item_index_)
 
 
         return res_series
