@@ -77,6 +77,51 @@ def test_slim_simple_predict():
     assert 7 in res.index
     assert not np.isnan(res.loc[7])
 
+def test_slim_multiple_predict():
+    algo = slim.SLIM(regularization=(.05, .1))
+    algo.fit(simple_ratings)
+
+    res = algo.predict_for_user(1, [6, 7])
+
+    assert res is not None
+    assert len(res) == 2
+    assert 6 in res.index
+    assert 7 in res.index
+    assert res.index[0] == 6
+    assert res.index[1] == 7
+    assert not np.isnan(res.loc[7])
+
+
+def test_slim_unordered_predict():
+    algo = slim.SLIM(regularization=(.05, .1))
+    algo.fit(simple_ratings)
+
+    res = algo.predict_for_user(1, [7, 6, 9])
+
+    assert res is not None
+    assert len(res) == 3
+    assert 7 in res.index
+    assert 6 in res.index
+    assert 9 in res.index
+    assert res.index[0] == 7
+    assert res.index[1] == 6
+    assert res.index[2] == 9
+    assert not np.isnan(res.loc[7])
+
+def test_slim_predict_all():
+    algo = slim.SLIM(regularization=(.05, .1))
+    algo.fit(simple_ratings)
+
+    res = algo.predict_for_user(1)
+
+    assert res is not None
+    assert len(res) == 4
+    assert 6 in res.index
+    assert 7 in res.index
+    assert 8 in res.index
+    assert 9 in res.index
+    assert not np.isnan(res.loc[7])
+
 @mark.skip("Redundant with the parallel test")
 def test_slim_train_big():
     "Simple tests for bounded models"
@@ -88,7 +133,6 @@ def test_slim_train_big():
     assert all(np.logical_not(np.isnan(algo.coefficients_.data)))
     assert len(algo.coefficients_.data) > 0
 
-
     res = algo.predict_for_user(1, [7])
 
     assert res is not None
@@ -96,7 +140,7 @@ def test_slim_train_big():
     assert 7 in res.index
     assert not np.isnan(res.loc[7])
 
-def test_slim_train_big_parallel():
+def test_slim_predict_big_parallel():
     "Simple tests for bounded models"
     algo = slim.SLIM(regularization=(.05, .1), nProcs=5)
     algo.fit(ml_ratings)
@@ -113,3 +157,8 @@ def test_slim_train_big_parallel():
     assert len(res) == 1
     assert 7 in res.index
     assert not np.isnan(res.loc[7])
+
+    res = algo.predict_for_user(1)
+
+    assert res is not None
+    assert len(res) == len(ml_ratings.item.unique())

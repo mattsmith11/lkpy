@@ -119,7 +119,7 @@ class SLIM(Predictor):
 
         return self
 
-    def predict_for_user(self, user, items, ratings=None):
+    def predict_for_user(self, user, items=None, ratings=None):
         """
         Args:
             user: the user ID
@@ -129,36 +129,49 @@ class SLIM(Predictor):
         Returns:
             pandas.Series: scores for the items, indexed by item id.
         """
-        _logger.debug('Predicting %d item(s) for user %s', len(items), user)
+        _logger.debug('Predicting %d item(s) for user %s', "ALL" if items is None else len(items), user)
 
         if ratings is not None:
             _logger.debug('SLIM does not support ratings fit at predict time')
             raise NotImplementedError('SLIM does not support ratings fit at predict time')
             
         upos = self.user_index_.get_loc(user)
-        ipos = self.item_index_.get_indexer(items)
-
         if -1 is upos:
             _logger.warn("The requested user was not in the original dataset")
-
-        if -1 in ipos:
-            _logger.warn("Some item ratings requested are for items missing from fit data set")
-
-        ipos = ipos[ipos >= 0]
-
-        _logger.debug('Items %s have positions %s in the coefficient matrix', items, ipos )
+            raise KeyError
 
         urow = self.ratings_matrix_.row(upos)
         urow = np.reshape(urow, (-1, 1)).transpose()
 
-        raw_scores = (urow @ self.coefficients_[:, ipos])[0]
+        res_series = None
         indexed_scores = {}
-        raw_scores_index = 0
-        for i in ipos:
-            _logger.debug('Predicted score for %s is %s', i, raw_scores[raw_scores_index])
-            indexed_scores[self.item_index_[i]] = raw_scores[raw_scores_index]
-            raw_scores_index += 1
-        return pd.Series(indexed_scores)
+        if items is not None :
+            
+            ipos = self.item_index_.get_indexer(items)
+            if -1 in ipos:
+                _logger.warn("Some item ratings requested are for items missing from fit data set")
+
+            ipos = ipos[ipos >= 0]
+            _logger.debug('Items %s have positions %s in the coefficient matrix', items, ipos )
+            raw_scores = (urow @ self.coefficients_[:, ipos])[0]
+
+        
+            raw_scores_index = 0
+            for i in ipos:
+                _logger.debug('Predicted score for %s is %s', i, raw_scores[raw_scores_index])
+                indexed_scores[self.item_index_[i]] = raw_scores[raw_scores_index]
+                raw_scores_index += 1
+            
+            
+            res_series = pd.Series(indexed_scores)
+
+        else:
+            raw_scores = (urow @ self.coefficients_[:])[0]
+            _logger.warn("raw scores: %s", type(raw_scores))
+            res_series = pd.Series(raw_scores, index = self.item_index_)
+
+
+        return res_series
 
     def _train_item(self, item, rmat):
         #_logger.info('[%s] computing coefficients for item %s', self._timer, item)
