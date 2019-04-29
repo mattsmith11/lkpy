@@ -153,7 +153,6 @@ def test_slim_predict_all():
 
 @mark.skip("Redundant with the parallel test")
 def test_slim_train_big():
-    "Simple tests for bounded models"
     algo = slim.SLIM(regularization=(.05, .1))
     algo.fit(ml_ratings)
 
@@ -170,7 +169,6 @@ def test_slim_train_big():
     assert not np.isnan(res.loc[7])
 
 def test_slim_predict_big_parallel():
-    "Simple tests for bounded models"
     algo = slim.SLIM(regularization=(.05, .1), nprocs=5)
     algo.fit(ml_ratings)
 
@@ -193,7 +191,6 @@ def test_slim_predict_big_parallel():
     assert len(res) == len(ml_ratings.item.unique())
 
 def test_slim_predict_binary_big_parallel():
-    "Simple tests for bounded models"
     algo = slim.SLIM(regularization=(.05, .1), binary=True, nprocs=5)
     algo.fit(ml_ratings)
 

@@ -100,7 +100,7 @@ class SLIM(Predictor):
         if self.binary:
             data = data.copy(deep=True)
             data['rating'] = 1
-
+        
         rmat, uidx, iidx = sparse_ratings(data)
 
         coeff_row = np.array([], dtype=np.int32)
@@ -109,7 +109,7 @@ class SLIM(Predictor):
 
         # Optimize each item independently on different threads using joblib
         item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(self._train_item)(item, rmat) for item in range(rmat.ncols))
-            
+
         for coeff_tuple in item_coeff_array_tuples:
             # Add coefficients with proper indexes for sparse matrix
             coeff_row = np.append(coeff_row, coeff_tuple[1])
@@ -138,7 +138,7 @@ class SLIM(Predictor):
         Returns:
             pandas.Series: scores for the items, indexed by item id.
         """
-        _logger.debug('Predicting %d item(s) for user %s', "ALL" if items is None else len(items), user)
+        _logger.debug('Predicting %s item(s) for user %s', "ALL" if items is None else len(items), user)
 
         if ratings is not None:
             _logger.debug('SLIM does not support ratings fit at predict time')
@@ -173,7 +173,7 @@ class SLIM(Predictor):
             res_series = pd.Series(indexed_scores, name='slim_score')
 
         else:
-            raw_scores = (urow @ self.coefficients_[:])[0]
+            raw_scores = (urow @ self.coefficients_)[0]
             res_series = pd.Series(raw_scores, name='slim_score', index=self.item_index_)
 
 
