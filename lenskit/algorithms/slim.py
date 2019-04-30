@@ -58,7 +58,7 @@ class SLIM(Predictor):
         nprocs(int): Number of threads to use when fitting the data
     """
 
-    def __init__(self, regularization=(.5, 1.0), binary=False, nprocs=1):
+    def __init__(self, regularization=(1.0, 2.0), binary=False, nprocs=1):
         if isinstance(regularization, tuple):
             self.regularization = regularization
             self.l_1_regularization, self.l_2_regularization = regularization
@@ -101,6 +101,7 @@ class SLIM(Predictor):
             data = data.copy(deep=True)
             data['rating'] = 1
         
+        self.adjusted_alpha_ = self.alpha / len(data.user.unique())
         rmat, uidx, iidx = sparse_ratings(data)
 
         coeff_row = np.array([], dtype=np.int32)
@@ -181,7 +182,7 @@ class SLIM(Predictor):
 
     def _train_item(self, item, rmat):
         # Create an ElasticNet optimization function
-        opt_model = ElasticNet(alpha=self.alpha,l1_ratio=self.l_1_ratio,positive=True,fit_intercept=True,copy_X=False)
+        opt_model = ElasticNet(alpha=self.adjusted_alpha_,l1_ratio=self.l_1_ratio,positive=True,fit_intercept=True,copy_X=False)
 
         # Copy the passed in matrix to avoid altering the original ratings matrix
         sp_rmat = rmat.to_scipy().copy()

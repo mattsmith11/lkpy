@@ -49,7 +49,7 @@ def test_slim_train_smoke_test():
     algo.fit(simple_ratings)
 
 def test_slim_train():
-    algo = slim.SLIM(regularization=(.05, .1))
+    algo = slim.SLIM()
     algo.fit(simple_ratings)
 
     assert isinstance(algo.item_index_, pd.Index)
@@ -67,7 +67,7 @@ def test_slim_train():
     assert algo.coefficients_[seven, nine] > 0
 
 def test_slim_train_binary():
-    algo = slim.SLIM(regularization=(.05, .1), binary=True)
+    algo = slim.SLIM(binary=True)
     algo.fit(simple_ratings)
 
     assert isinstance(algo.item_index_, pd.Index)
@@ -85,7 +85,7 @@ def test_slim_train_binary():
     assert algo.coefficients_[seven, nine] > 0
 
 def test_slim_simple_predict():
-    algo = slim.SLIM(regularization=(.05, .1))
+    algo = slim.SLIM()
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1, [7])
@@ -96,7 +96,7 @@ def test_slim_simple_predict():
     assert not np.isnan(res.loc[7])
 
 def test_slim_simple_predict_binary():
-    algo = slim.SLIM(regularization=(.05, .1), binary=True)
+    algo = slim.SLIM(binary=True)
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1, [7])
@@ -107,7 +107,7 @@ def test_slim_simple_predict_binary():
     assert not np.isnan(res.loc[7])
 
 def test_slim_multiple_predict():
-    algo = slim.SLIM(regularization=(.05, .1))
+    algo = slim.SLIM()
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1, [6, 7])
@@ -122,7 +122,7 @@ def test_slim_multiple_predict():
 
 
 def test_slim_unordered_predict():
-    algo = slim.SLIM(regularization=(.05, .1))
+    algo = slim.SLIM()
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1, [7, 6, 9])
@@ -138,7 +138,7 @@ def test_slim_unordered_predict():
     assert not np.isnan(res.loc[7])
 
 def test_slim_predict_all():
-    algo = slim.SLIM(regularization=(.05, .1))
+    algo = slim.SLIM()
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1)
@@ -153,7 +153,7 @@ def test_slim_predict_all():
 
 @mark.skip("Redundant with the parallel test")
 def test_slim_train_big():
-    algo = slim.SLIM(regularization=(.05, .1))
+    algo = slim.SLIM()
     algo.fit(ml_ratings)
 
     # Diagonal of the coefficient matrix is 0 and there are some values
@@ -169,7 +169,7 @@ def test_slim_train_big():
     assert not np.isnan(res.loc[7])
 
 def test_slim_predict_big_parallel():
-    algo = slim.SLIM(regularization=(.05, .1), nprocs=5)
+    algo = slim.SLIM(nprocs=5)
     algo.fit(ml_ratings)
 
     # Diagonal of the coefficient matrix is 0 and there are some values
@@ -191,7 +191,7 @@ def test_slim_predict_big_parallel():
     assert len(res) == len(ml_ratings.item.unique())
 
 def test_slim_predict_binary_big_parallel():
-    algo = slim.SLIM(regularization=(.05, .1), binary=True, nprocs=5)
+    algo = slim.SLIM(binary=True, nprocs=5)
     algo.fit(ml_ratings)
 
     # Diagonal of the coefficient matrix is 0 and there are some values
