@@ -211,3 +211,137 @@ def test_slim_predict_binary_big_parallel():
 
     assert res is not None
     assert len(res) == len(ml_ratings.item.unique())
+
+def test_fsslim_init():
+    algo = slim.fsSLIM()
+
+def test_fsslim_init_warn_negative_regularization():
+    try:
+        algo = slim.fsSLIM(-1)
+    except ValueError:
+        pass  # this is fine
+
+def test_fsslim_init_warn_k_positive():
+    try:
+        algo = slim.fsSLIM(k=0)
+    except ValueError:
+        pass  # this is fine
+
+def test_fsslim_init_warn_no_selector():
+    try:
+        algo = slim.fsSLIM(selector=None)
+    except ValueError:
+        pass  # this is fine
+
+def test_fsslim_init_warn_invalid_selector():
+    try:
+        algo = slim.fsSLIM(selector=slim.SLIM())
+    except ValueError:
+        pass  # this is fine
+
+def test_fsslim_train_smoke_test():
+    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo.fit(simple_ratings)
+
+def test_fsslim_train():
+    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo.fit(simple_ratings)
+
+    assert isinstance(algo.item_index_, pd.Index)
+    assert isinstance(algo.user_index_, pd.Index)
+
+    # Diagonal of the coefficient matrix is 0 and there are some values
+    assert all(algo.coefficients_.diagonal() == 0)
+    assert all(np.logical_not(np.isnan(algo.coefficients_.data)))
+    assert len(algo.coefficients_.data) > 0
+    
+    # 7 is associated with 9
+    seven, nine = algo.item_index_.get_indexer([7, 9])
+    _log.info('seven: %d', seven)
+    _log.info('nine: %d', nine)
+    assert algo.coefficients_[seven, nine] > 0
+
+def test_fsslim_train_binary():
+    algo = slim.fsSLIM(regularization=(.005, .005), k=None, binary=True)
+    algo.fit(simple_ratings)
+
+    assert isinstance(algo.item_index_, pd.Index)
+    assert isinstance(algo.user_index_, pd.Index)
+
+    # Diagonal of the coefficient matrix is 0 and there are some values
+    assert all(algo.coefficients_.diagonal() == 0)
+    assert all(np.logical_not(np.isnan(algo.coefficients_.data)))
+    assert len(algo.coefficients_.data) > 0
+    
+    # 7 is associated with 9
+    seven, nine = algo.item_index_.get_indexer([7, 9])
+    _log.info('seven: %d', seven)
+    _log.info('nine: %d', nine)
+    assert algo.coefficients_[seven, nine] > 0
+
+def test_fsslim_simple_predict():
+    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo.fit(simple_ratings)
+
+    res = algo.predict_for_user(1, [7])
+
+    assert res is not None
+    assert len(res) == 1
+    assert 7 in res.index
+    assert not np.isnan(res.loc[7])
+
+def test_fsslim_simple_predict_binary():
+    algo = slim.fsSLIM(regularization=(.05, .05), k=None, binary=True)
+    algo.fit(simple_ratings)
+
+    res = algo.predict_for_user(1, [7])
+
+    assert res is not None
+    assert len(res) == 1
+    assert 7 in res.index
+    assert not np.isnan(res.loc[7])
+
+def test_fsslim_multiple_predict():
+    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo.fit(simple_ratings)
+
+    res = algo.predict_for_user(1, [6, 7])
+
+    assert res is not None
+    assert len(res) == 2
+    assert 6 in res.index
+    assert 7 in res.index
+    assert res.index[0] == 6
+    assert res.index[1] == 7
+    assert not np.isnan(res.loc[7])
+
+
+def test_fsslim_unordered_predict():
+    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo.fit(simple_ratings)
+
+    res = algo.predict_for_user(1, [7, 6, 9])
+
+    assert res is not None
+    assert len(res) == 3
+    assert 7 in res.index
+    assert 6 in res.index
+    assert 9 in res.index
+    assert res.index[0] == 7
+    assert res.index[1] == 6
+    assert res.index[2] == 9
+    assert not np.isnan(res.loc[7])
+
+def test_fsslim_predict_all():
+    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo.fit(simple_ratings)
+
+    res = algo.predict_for_user(1)
+
+    assert res is not None
+    assert len(res) == 4
+    assert 6 in res.index
+    assert 7 in res.index
+    assert 8 in res.index
+    assert 9 in res.index
+    assert not np.isnan(res.loc[7])

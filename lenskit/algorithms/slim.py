@@ -38,7 +38,6 @@ def _train_item(slimAlgo, item, rmat):
     sparse_coeff_coo = opt_model.sparse_coef_.tocoo()
     return (item,  np.full(sparse_coeff_coo.nnz, item), sparse_coeff_coo.col, sparse_coeff_coo.data)
 
-
 class SLIM(Predictor):
     """
     A user based collaborative filtering Top-N recommendation algorithm. That implements the following
@@ -122,12 +121,13 @@ class SLIM(Predictor):
         self.adjusted_alpha_ = self.alpha / len(data.user.unique())
         rmat, uidx, iidx = sparse_ratings(data)
 
+        # Optimize each item independently on different threads using joblib
+        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols))
+        _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
+
         coeff_row = np.array([], dtype=np.int32)
         coeff_col = np.array([], dtype=np.int32)
         coeff_values = np.array([], dtype=np.float64)
-
-        # Optimize each item independently on different threads using joblib
-        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols))
 
         for coeff_tuple in item_coeff_array_tuples:
             # Add coefficients with proper indexes for sparse matrix
@@ -135,10 +135,8 @@ class SLIM(Predictor):
             coeff_col = np.append(coeff_col, coeff_tuple[2])
             coeff_values = np.append(coeff_values, coeff_tuple[3])
 
-        _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
-
         # Create sparse coefficient matrix
-        self.coefficients_ = CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
+        self.coefficients_ =  CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
 
         self.user_index_ = uidx
         self.item_index_ = iidx
@@ -292,22 +290,23 @@ class fsSLIM(Predictor):
             SLIM: the fit slim algorithm object.
         """
         self._timer = util.Stopwatch()
+        selector_data = data.copy(deep=True)
+        self.selector.fit(selector_data)
 
         if self.binary:
             data = data.copy(deep=True)
             data['rating'] = 1
-
-        self.selector.fit(data)
         
         self.adjusted_alpha_ = self.alpha / len(data.user.unique())
         rmat, uidx, iidx = sparse_ratings(data)
 
+        # Optimize each item independently on different threads using joblib
+        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols))
+        _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
+
         coeff_row = np.array([], dtype=np.int32)
         coeff_col = np.array([], dtype=np.int32)
         coeff_values = np.array([], dtype=np.float64)
-
-        # Optimize each item independently on different threads using joblib
-        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols))
 
         for coeff_tuple in item_coeff_array_tuples:
             # Add coefficients with proper indexes for sparse matrix
@@ -315,11 +314,8 @@ class fsSLIM(Predictor):
             coeff_col = np.append(coeff_col, coeff_tuple[2])
             coeff_values = np.append(coeff_values, coeff_tuple[3])
 
-        _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
-
         # Create sparse coefficient matrix
-        #_logger.warn('[%s] Coefficient matrix %s cols, %s rows, %s values', self._timer, len(coeff_col), len(coeff_row), len(coeff_values))
-        self.coefficients_ = CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
+        self.coefficients_ =  CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
 
         self.user_index_ = uidx
         self.item_index_ = iidx
@@ -375,8 +371,7 @@ class fsSLIM(Predictor):
             raw_scores = (urow @ self.coefficients_)[0]
             res_series = pd.Series(raw_scores, name='slim_score', index=self.item_index_)
 
-
         return res_series
 
     def __str__(self):
-        return 'fsSLIM(regularization_one={}, regularization_two={}, binary={})'.format(self.regularization_one, self.regularization_two, self.binary)
+        return 'fsSLIM(regularization_one={}, regularization_two={}, k={}, selector={}, binary={})'.format(self.regularization_one, self.regularization_two, self.k, self.selector, self.binary)
