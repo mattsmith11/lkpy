@@ -13,7 +13,7 @@ import scipy.sparse.linalg as spla
 from numba import njit, prange
 
 from lenskit import util, matrix, DataWarning
-from . import Predictor
+from . import Predictor, ItemNeighborhood
 
 _logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ _predictors = {
 }
 
 
-class ItemItem(Predictor):
+class ItemItem(Predictor, ItemNeighborhood):
     """
     Item-item nearest-neighbor collaborative filtering with ratings. This item-item implementation
     is not terribly configurable; it hard-codes design decisions found to work well in the previous
@@ -361,6 +361,36 @@ class ItemItem(Predictor):
                       user, results.notna().sum(), len(items))
 
         return results
+
+    def item_neighborhood(self, item, k=100):
+
+        # set up item result vector
+        # ipos will be an array of item indices
+        i_pos = self.item_index_.get_indexer([item])
+        i_pos = i_pos[i_pos >= 0]
+
+        # scratch result array
+        iscore = np.full(len(self.item_index_), np.nan, dtype=np.float_)
+
+        # now compute the predictions
+        iscore = self._predict_agg(self.sim_matrix_.N,
+                                   len(self.item_index_),
+                                   (self.min_nbrs, self.nnbrs),
+                                   rate_v, i_pos)
+
+        nscored = np.sum(np.logical_not(np.isnan(iscore)))
+        if self.center:
+            iscore += self.item_means_
+        assert np.sum(np.logical_not(np.isnan(iscore))) == nscored
+
+        results = pd.Series(iscore, index=self.item_index_)
+        results = results[results.notna()]
+        results = results.reindex(items, fill_value=np.nan)
+        assert results.notna().sum() == nscored
+
+        results = results.reset_index().rename(columns={'index': 'item'})
+        return results
+
 
     def __str__(self):
         return 'ItemItem(nnbrs={}, msize={})'.format(self.nnbrs, self.save_nbrs)

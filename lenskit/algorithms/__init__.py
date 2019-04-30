@@ -199,7 +199,7 @@ class CandidateSelector(Algorithm, metaclass=ABCMeta):
         else:
             return np.array(ratings)
 
-class ItemNeighborhoodSelector(Algorithm, metaclass=ABCMeta):
+class ItemNeighborhood(Algorithm, metaclass=ABCMeta):
     """
     Determine item neighborhood based on the implemented algorithm.
     """
@@ -213,7 +213,7 @@ class ItemNeighborhoodSelector(Algorithm, metaclass=ABCMeta):
             item:
                 The item ID.
             k:
-                Number of neighbors to return
+                Number of neighbors to return, pass ''None'' for unlimited
         
         Returns:
             pandas.DataFrame:

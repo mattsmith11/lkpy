@@ -16,7 +16,7 @@ from sklearn.linear_model import SGDRegressor, ElasticNet
 from lenskit import util
 from .. import check
 from ..matrix import CSR, sparse_ratings
-from . import Predictor
+from . import Predictor, ItemNeighborhood
 from . import item_knn
 
 _logger = logging.getLogger(__name__)
@@ -232,7 +232,8 @@ class fsSLIM(Predictor):
             Number of threads to use when fitting the data
 
         k:
-            Number of related items to consider when generating coefficients
+            Number of related items to consider when generating coefficients, pass ''None''
+            to use all related items returned by the selector algorithm
 
         selector:
             Predictor or Recommender Algorithm that implements ItemNeighorhoodSelector, used
@@ -247,7 +248,7 @@ class fsSLIM(Predictor):
         selector(ItemNeighborhoodSelector)
     """
 
-    def __init__(self, regularization=(1.0, 2.0), binary=False, nprocs=1, k=100, selector=item_knn.ItemItem(None, 100, save_nbrs=100)):
+    def __init__(self, regularization=(1.0, 2.0), k=100, selector=item_knn.ItemItem(None, 100, save_nbrs=100), binary=False, nprocs=1, ):
         if isinstance(regularization, tuple):
             self.regularization = regularization
             self.l_1_regularization, self.l_2_regularization = regularization
@@ -258,8 +259,9 @@ class fsSLIM(Predictor):
 
         self.binary = binary
         self.nprocs = int(nprocs)
+        self.k = k
         self.selector = selector
-
+        
         check.check_value(self.l_1_regularization >= 0, "l_1 norm regularization value {} must be nonnegative",
                           self.l_1_regularization)
         check.check_value(self.l_2_regularization >= 0, "l_2 norm regularization {} must be nonnegative",
@@ -268,7 +270,9 @@ class fsSLIM(Predictor):
                           self.binary)
         check.check_value(self.nprocs > 0, "Number of processes {} must be a positive integer",
                           self.nprocs)
-        check.check_value(type(self.selector) is item_knn.ItemItem, "Feature selector {} must be implement",
+        check.check_value(self.k == None or self.k > 0, "Number of related items to consider in optimization problem {} must be positive integer or None",
+                          self.k )
+        check.check_value(issubclass(type(self.selector), ItemNeighborhood), "Feature selector {} must be implement",
                           type(self.selector))
 
 
