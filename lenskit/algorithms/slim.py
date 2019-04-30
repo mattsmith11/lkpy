@@ -248,7 +248,7 @@ class fsSLIM(Predictor):
         selector(ItemNeighborhoodSelector)
     """
 
-    def __init__(self, regularization=(1.0, 2.0), k=100, selector=item_knn.ItemItem(None, 100, save_nbrs=100), binary=False, max_iter=1000, nprocs=1):
+    def __init__(self, regularization=(1.0, 2.0), k=100, selector=item_knn.ItemItem(100, 100, save_nbrs=100), binary=False, max_iter=1000, nprocs=1):
         if isinstance(regularization, tuple):
             self.regularization = regularization
             self.l_1_regularization, self.l_2_regularization = regularization
@@ -258,7 +258,7 @@ class fsSLIM(Predictor):
             self.l_2_regularization = regularization
 
         self.binary = binary
-        self.k = k
+        self.k = int(k)
         self.selector = selector
         self.max_iter = int(max_iter)
         self.nprocs = int(nprocs)
@@ -278,8 +278,6 @@ class fsSLIM(Predictor):
         check.check_value(self.nprocs > 0, "Number of processes {} must be a positive integer",
                           self.nprocs)
         
-
-
         # Calculating alpha using the two regularization values
         self.alpha = self.l_1_regularization + self.l_2_regularization
         self.l_1_ratio = self.l_1_regularization / self.alpha
@@ -305,8 +303,21 @@ class fsSLIM(Predictor):
         
         rmat, uidx, iidx = sparse_ratings(data)
 
+        item_neighborhoods = {}
+        for item in iidx:
+            item_neighbors = self.selector.item_neighborhood(item, self.k)
+            if len(item_neighbors) != self.k:
+                _logger.error('For item %s neighbor selector generated a neighborhood of size %s instead of %s', item, len(item_neighbors), self.k)
+                return ValueError
+
+            neighbor_ratings = data.loc[~data['item'].isin(item_neighbors)]
+
+            n_rmat, n_uidx, n_iidx = sparse_ratings(neighbor_ratings)
+
+            item_neighborhoods[item] = (item, n_rmat, n_uidx, n_iidx)
+
         # Optimize each item independently on different threads using joblib
-        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols))
+        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols)) #(item, n_rmat, n_uidx, n_iidx) in item_neighborhoods)
         _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
 
         coeff_row = np.array([], dtype=np.int32)

@@ -363,14 +363,33 @@ class ItemItem(Predictor, ItemNeighborhood):
         return results
 
     def item_neighborhood(self, item, k=100):
-
         # set up item result vector
         # ipos will be an array of item indices
-        i_pos = self.item_index_.get_indexer([item])
+        i_pos = self.item_index_.get_indexer(self.item_index_)
         i_pos = i_pos[i_pos >= 0]
+ 
+        ratings = pd.Series({ item: 5})
+
+        # set up rating array
+        # get rated item positions & limit to in-model items
+        ri_pos = self.item_index_.get_indexer(ratings.index)
+        m_rates = ratings[ri_pos >= 0]
+        ri_pos = ri_pos[ri_pos >= 0]
+        rate_v = np.full(len(self.item_index_), np.nan, dtype=np.float_)
+        # mean-center the rating array
+        if self.center:
+            rate_v[ri_pos] = m_rates.values - self.item_means_[ri_pos]
+        else:
+            rate_v[ri_pos] = m_rates.values
 
         # scratch result array
         iscore = np.full(len(self.item_index_), np.nan, dtype=np.float_)
+
+        _logger.debug('model %s', self.sim_matrix_.N)
+        _logger.debug('nitems %s', len(self.item_index_))
+        _logger.debug('nrange %s', (self.min_nbrs, self.nnbrs))
+        _logger.debug('ratings %s', rate_v)
+        _logger.debug('target %s', i_pos)
 
         # now compute the predictions
         iscore = self._predict_agg(self.sim_matrix_.N,
@@ -383,12 +402,13 @@ class ItemItem(Predictor, ItemNeighborhood):
             iscore += self.item_means_
         assert np.sum(np.logical_not(np.isnan(iscore))) == nscored
 
-        results = pd.Series(iscore, index=self.item_index_)
-        results = results[results.notna()]
-        results = results.reindex(items, fill_value=np.nan)
-        assert results.notna().sum() == nscored
+#        _logger.debug('iscore %s', iscore)
 
-        results = results.reset_index().rename(columns={'index': 'item'})
+        results = pd.Series(iscore, index=self.item_index_)
+        results = results.sort_values(ascending=False).head(k)
+
+#        _logger.debug('results %s', results.head())
+
         return results
 
 
