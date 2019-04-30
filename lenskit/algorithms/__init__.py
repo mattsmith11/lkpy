@@ -168,7 +168,7 @@ class CandidateSelector(Algorithm, metaclass=ABCMeta):
     """
     Select candidates for recommendation for a user, possibly with some
     additional ratings.
-    """
+    """    
 
     @abstractmethod
     def candidates(self, user, ratings=None):
@@ -198,3 +198,28 @@ class CandidateSelector(Algorithm, metaclass=ABCMeta):
             return ratings
         else:
             return np.array(ratings)
+
+class ItemNeighborhoodSelector(Algorithm, metaclass=ABCMeta):
+    """
+    Determine item neighborhood based on the implemented algorithm.
+    """
+
+    @abstractmethod
+    def item_neighborhood(self, item, k=100):
+        """
+        Find the neighborhood for the item.
+
+        Args:
+            item:
+                The item ID.
+            k:
+                Number of neighbors to return
+        
+        Returns:
+            pandas.DataFrame:
+                a frame with an ``item`` column; if the recommender also produces scores,
+                they will be in a ``score`` column.
+        """
+        raise NotImplementedError()
+
+        

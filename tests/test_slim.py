@@ -67,7 +67,7 @@ def test_slim_train():
     assert algo.coefficients_[seven, nine] > 0
 
 def test_slim_train_binary():
-    algo = slim.SLIM(binary=True)
+    algo = slim.SLIM(regularization=(.05, .05), binary=True)
     algo.fit(simple_ratings)
 
     assert isinstance(algo.item_index_, pd.Index)
@@ -96,7 +96,7 @@ def test_slim_simple_predict():
     assert not np.isnan(res.loc[7])
 
 def test_slim_simple_predict_binary():
-    algo = slim.SLIM(binary=True)
+    algo = slim.SLIM(regularization=(.05, .05), binary=True)
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1, [7])
