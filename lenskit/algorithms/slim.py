@@ -23,7 +23,7 @@ _logger = logging.getLogger(__name__)
 
 def _train_item(slimAlgo, item, rmat):
     # Create an ElasticNet optimization function
-    opt_model = ElasticNet(alpha=slimAlgo.adjusted_alpha_, max_iter=10000, l1_ratio=slimAlgo.l_1_ratio, positive=True, fit_intercept=True, copy_X=False)
+    opt_model = ElasticNet(alpha=slimAlgo.alpha, max_iter=slimAlgo.max_iter, tol=.00001, l1_ratio=slimAlgo.l_1_ratio, positive=True, fit_intercept=False, copy_X=False)
 
     # Copy the passed in matrix to avoid altering the original ratings matrix
     sp_rmat = rmat.to_scipy().copy()
@@ -75,7 +75,7 @@ class SLIM(Predictor):
         nprocs(int): Number of threads to use when fitting the data
     """
 
-    def __init__(self, regularization=(1.0, 2.0), binary=False, nprocs=1):
+    def __init__(self, regularization=(1.0, 2.0), binary=False, max_iter=1000, nprocs=1):
         if isinstance(regularization, tuple):
             self.regularization = regularization
             self.l_1_regularization, self.l_2_regularization = regularization
@@ -85,14 +85,17 @@ class SLIM(Predictor):
             self.l_2_regularization = regularization
 
         self.binary = binary
+        self.max_iter = int(max_iter)
         self.nprocs = int(nprocs)
-
+        
         check.check_value(self.l_1_regularization >= 0, "l_1 norm regularization value {} must be nonnegative",
                           self.l_1_regularization)
         check.check_value(self.l_2_regularization >= 0, "l_2 norm regularization {} must be nonnegative",
                           self.l_2_regularization)
         check.check_value(type(self.binary) == type(False), "Binary {} must be a boolean value",
                           self.binary)
+        check.check_value(self.max_iter > 0, "Maximum number of optimization iterations {} must be a positive integer",
+                          self.max_iter)
         check.check_value(self.nprocs > 0, "Number of processes {} must be a positive integer",
                           self.nprocs)
 
@@ -117,8 +120,7 @@ class SLIM(Predictor):
         if self.binary:
             data = data.copy(deep=True)
             data['rating'] = 1
-        
-        self.adjusted_alpha_ = self.alpha / len(data.user.unique())
+
         rmat, uidx, iidx = sparse_ratings(data)
 
         # Optimize each item independently on different threads using joblib
@@ -177,7 +179,7 @@ class SLIM(Predictor):
                 _logger.warn("Some item ratings requested are for items missing from fit data set")
 
             ipos = ipos[ipos >= 0]
-            _logger.debug('Items %s have positions %s in the coefficient matrix', items, ipos )
+            _logger.debug('Scoring items: %s', items)
             raw_scores = (urow @ self.coefficients_[:, ipos])[0]
 
             raw_scores_index = 0
@@ -246,7 +248,7 @@ class fsSLIM(Predictor):
         selector(ItemNeighborhoodSelector)
     """
 
-    def __init__(self, regularization=(1.0, 2.0), k=100, selector=item_knn.ItemItem(None, 100, save_nbrs=100), binary=False, nprocs=1, ):
+    def __init__(self, regularization=(1.0, 2.0), k=100, selector=item_knn.ItemItem(None, 100, save_nbrs=100), binary=False, max_iter=1000, nprocs=1):
         if isinstance(regularization, tuple):
             self.regularization = regularization
             self.l_1_regularization, self.l_2_regularization = regularization
@@ -256,9 +258,10 @@ class fsSLIM(Predictor):
             self.l_2_regularization = regularization
 
         self.binary = binary
-        self.nprocs = int(nprocs)
         self.k = k
         self.selector = selector
+        self.max_iter = int(max_iter)
+        self.nprocs = int(nprocs)
         
         check.check_value(self.l_1_regularization >= 0, "l_1 norm regularization value {} must be nonnegative",
                           self.l_1_regularization)
@@ -266,12 +269,15 @@ class fsSLIM(Predictor):
                           self.l_2_regularization)
         check.check_value(type(self.binary) == type(False), "Binary {} must be a boolean value",
                           self.binary)
-        check.check_value(self.nprocs > 0, "Number of processes {} must be a positive integer",
-                          self.nprocs)
         check.check_value(self.k == None or self.k > 0, "Number of related items to consider in optimization problem {} must be positive integer or None",
                           self.k )
         check.check_value(issubclass(type(self.selector), ItemNeighborhood), "Feature selector {} must be implement",
                           type(self.selector))
+        check.check_value(self.max_iter > 0, "Maximum number of optimization iterations {} must be a positive integer",
+                          self.max_iter)
+        check.check_value(self.nprocs > 0, "Number of processes {} must be a positive integer",
+                          self.nprocs)
+        
 
 
         # Calculating alpha using the two regularization values
@@ -297,7 +303,6 @@ class fsSLIM(Predictor):
             data = data.copy(deep=True)
             data['rating'] = 1
         
-        self.adjusted_alpha_ = self.alpha / len(data.user.unique())
         rmat, uidx, iidx = sparse_ratings(data)
 
         # Optimize each item independently on different threads using joblib

@@ -226,6 +226,10 @@ def test_fsslim_init_warn_k_positive():
         algo = slim.fsSLIM(k=0)
     except ValueError:
         pass  # this is fine
+    try:
+        algo = slim.fsSLIM(k=-1)
+    except ValueError:
+        pass  # this is fine
 
 def test_fsslim_init_warn_no_selector():
     try:
@@ -240,11 +244,11 @@ def test_fsslim_init_warn_invalid_selector():
         pass  # this is fine
 
 def test_fsslim_train_smoke_test():
-    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo = slim.fsSLIM(k=None)
     algo.fit(simple_ratings)
 
 def test_fsslim_train():
-    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo = slim.fsSLIM(k=None)
     algo.fit(simple_ratings)
 
     assert isinstance(algo.item_index_, pd.Index)
@@ -280,7 +284,7 @@ def test_fsslim_train_binary():
     assert algo.coefficients_[seven, nine] > 0
 
 def test_fsslim_simple_predict():
-    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo = slim.fsSLIM(k=None)
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1, [7])
@@ -302,7 +306,7 @@ def test_fsslim_simple_predict_binary():
     assert not np.isnan(res.loc[7])
 
 def test_fsslim_multiple_predict():
-    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo = slim.fsSLIM(k=None)
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1, [6, 7])
@@ -317,7 +321,7 @@ def test_fsslim_multiple_predict():
 
 
 def test_fsslim_unordered_predict():
-    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo = slim.fsSLIM(k=None)
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1, [7, 6, 9])
@@ -333,7 +337,7 @@ def test_fsslim_unordered_predict():
     assert not np.isnan(res.loc[7])
 
 def test_fsslim_predict_all():
-    algo = slim.fsSLIM(regularization=(.1, .1), k=None)
+    algo = slim.fsSLIM(k=None)
     algo.fit(simple_ratings)
 
     res = algo.predict_for_user(1)
