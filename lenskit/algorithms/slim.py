@@ -182,7 +182,7 @@ class SLIM(Predictor):
 
     def _train_item(self, item, rmat):
         # Create an ElasticNet optimization function
-        opt_model = ElasticNet(alpha=self.adjusted_alpha_,l1_ratio=self.l_1_ratio,positive=True,fit_intercept=True,copy_X=False)
+        opt_model = ElasticNet(alpha=self.adjusted_alpha_, max_iter=10000, l1_ratio=self.l_1_ratio, positive=True, fit_intercept=True, copy_X=False)
 
         # Copy the passed in matrix to avoid altering the original ratings matrix
         sp_rmat = rmat.to_scipy().copy()
