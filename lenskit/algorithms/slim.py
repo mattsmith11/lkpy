@@ -21,6 +21,23 @@ from . import item_knn
 
 _logger = logging.getLogger(__name__)
 
+def _train_item(slimAlgo, item, rmat):
+    # Create an ElasticNet optimization function
+    opt_model = ElasticNet(alpha=slimAlgo.adjusted_alpha_, max_iter=10000, l1_ratio=slimAlgo.l_1_ratio, positive=True, fit_intercept=True, copy_X=False)
+
+    # Copy the passed in matrix to avoid altering the original ratings matrix
+    sp_rmat = rmat.to_scipy().copy()
+    item_col = sp_rmat.getcol(item)
+        
+    # Zero out the column of the item before optimizing to prevent the model from optimizing for the item itself
+    sp_rmat[sp_rmat[:, item].nonzero()[0], item] = 0
+
+    opt_model.fit(sp_rmat, item_col.todense())
+
+    # Indexes of coefficient array with positive values
+    sparse_coeff_coo = opt_model.sparse_coef_.tocoo()
+    return (item,  np.full(sparse_coeff_coo.nnz, item), sparse_coeff_coo.col, sparse_coeff_coo.data)
+
 
 class SLIM(Predictor):
     """
@@ -110,7 +127,7 @@ class SLIM(Predictor):
         coeff_values = np.array([], dtype=np.float64)
 
         # Optimize each item independently on different threads using joblib
-        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(self._train_item)(item, rmat) for item in range(rmat.ncols))
+        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols))
 
         for coeff_tuple in item_coeff_array_tuples:
             # Add coefficients with proper indexes for sparse matrix
@@ -121,7 +138,6 @@ class SLIM(Predictor):
         _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
 
         # Create sparse coefficient matrix
-        #_logger.warn('[%s] Coefficient matrix %s cols, %s rows, %s values', self._timer, len(coeff_col), len(coeff_row), len(coeff_values))
         self.coefficients_ = CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
 
         self.user_index_ = uidx
@@ -181,25 +197,8 @@ class SLIM(Predictor):
 
         return res_series
 
-    def _train_item(self, item, rmat):
-        # Create an ElasticNet optimization function
-        opt_model = ElasticNet(alpha=self.adjusted_alpha_, max_iter=10000, l1_ratio=self.l_1_ratio, positive=True, fit_intercept=True, copy_X=False)
-
-        # Copy the passed in matrix to avoid altering the original ratings matrix
-        sp_rmat = rmat.to_scipy().copy()
-        item_col = sp_rmat.getcol(item)
-            
-        # Zero out the column of the item before optimizing to prevent the model from optimizing for the item itself
-        sp_rmat[sp_rmat[:, item].nonzero()[0], item] = 0
-
-        opt_model.fit(sp_rmat, item_col.todense())
-
-        # Indexes of coefficient array with positive values
-        sparse_coeff_coo = opt_model.sparse_coef_.tocoo()
-        return (item,  np.full(sparse_coeff_coo.nnz, item), sparse_coeff_coo.col, sparse_coeff_coo.data)
-
     def __str__(self):
-        return 'SLIM(regularization_one={}, regularization_two={})'.format(self.regularization_one, self.regularization_two)
+        return 'SLIM(regularization_one={}, regularization_two={}, binary={})'.format(self.regularization_one, self.regularization_two, self.binary)
 
 class fsSLIM(Predictor):
     """
@@ -304,7 +303,7 @@ class fsSLIM(Predictor):
         coeff_values = np.array([], dtype=np.float64)
 
         # Optimize each item independently on different threads using joblib
-        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(self._train_item)(item, rmat) for item in range(rmat.ncols))
+        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols))
 
         for coeff_tuple in item_coeff_array_tuples:
             # Add coefficients with proper indexes for sparse matrix
@@ -375,22 +374,5 @@ class fsSLIM(Predictor):
 
         return res_series
 
-    def _train_item(self, item, rmat):
-        # Create an ElasticNet optimization function
-        opt_model = ElasticNet(alpha=self.adjusted_alpha_, max_iter=5000, l1_ratio=self.l_1_ratio, positive=True, fit_intercept=True, copy_X=False)
-
-        # Copy the passed in matrix to avoid altering the original ratings matrix
-        sp_rmat = rmat.to_scipy().copy()
-        item_col = sp_rmat.getcol(item)
-            
-        # Zero out the column of the item before optimizing to prevent the model from optimizing for the item itself
-        sp_rmat[sp_rmat[:, item].nonzero()[0], item] = 0
-
-        opt_model.fit(sp_rmat, item_col.todense())
-
-        # Indexes of coefficient array with positive values
-        sparse_coeff_coo = opt_model.sparse_coef_.tocoo()
-        return (item,  np.full(sparse_coeff_coo.nnz, item), sparse_coeff_coo.col, sparse_coeff_coo.data)
-
     def __str__(self):
-        return 'fsSLIM(regularization_one={}, regularization_two={})'.format(self.regularization_one, self.regularization_two)
+        return 'fsSLIM(regularization_one={}, regularization_two={}, binary={})'.format(self.regularization_one, self.regularization_two, self.binary)
