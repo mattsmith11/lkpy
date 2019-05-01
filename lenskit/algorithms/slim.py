@@ -21,7 +21,7 @@ from . import item_knn
 
 _logger = logging.getLogger(__name__)
 
-def _train_item(slimAlgo, item, rmat):
+def _train_item(slimAlgo, itemid, item, rmat):
     # Create an ElasticNet optimization function
     opt_model = ElasticNet(alpha=slimAlgo.alpha, max_iter=slimAlgo.max_iter, tol=.00001, l1_ratio=slimAlgo.l_1_ratio, positive=True, fit_intercept=False, copy_X=False)
 
@@ -36,7 +36,7 @@ def _train_item(slimAlgo, item, rmat):
 
     # Indexes of coefficient array with positive values
     sparse_coeff_coo = opt_model.sparse_coef_.tocoo()
-    return (item,  np.full(sparse_coeff_coo.nnz, item), sparse_coeff_coo.col, sparse_coeff_coo.data)
+    return (itemid, item,  np.full(sparse_coeff_coo.nnz, item), sparse_coeff_coo.col, sparse_coeff_coo.data)
 
 class SLIM(Predictor):
     """
@@ -124,18 +124,18 @@ class SLIM(Predictor):
         rmat, uidx, iidx = sparse_ratings(data)
 
         # Optimize each item independently on different threads using joblib
-        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols))
+        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, iidx[item], item, rmat) for item in range(rmat.ncols))
         _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
 
         coeff_row = np.array([], dtype=np.int32)
         coeff_col = np.array([], dtype=np.int32)
         coeff_values = np.array([], dtype=np.float64)
 
-        for coeff_tuple in item_coeff_array_tuples:
+        for itemid, item, c_row, c_col, c_val in item_coeff_array_tuples:
             # Add coefficients with proper indexes for sparse matrix
-            coeff_row = np.append(coeff_row, coeff_tuple[1])
-            coeff_col = np.append(coeff_col, coeff_tuple[2])
-            coeff_values = np.append(coeff_values, coeff_tuple[3])
+            coeff_row = np.append(coeff_row, c_row)
+            coeff_col = np.append(coeff_col, c_col)
+            coeff_values = np.append(coeff_values, c_val)
 
         # Create sparse coefficient matrix
         self.coefficients_ =  CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
@@ -307,28 +307,38 @@ class fsSLIM(Predictor):
         for item in iidx:
             item_neighbors = self.selector.item_neighborhood(item, self.k)
             if len(item_neighbors) != self.k:
-                _logger.error('For item %s neighbor selector generated a neighborhood of size %s instead of %s', item, len(item_neighbors), self.k)
-                return ValueError
+                _logger.warn('For item %s neighbor selector generated a neighborhood of size %s instead of %s', item, len(item_neighbors), self.k)
 
             neighbor_ratings = data.loc[~data['item'].isin(item_neighbors)]
 
             n_rmat, n_uidx, n_iidx = sparse_ratings(neighbor_ratings)
 
-            item_neighborhoods[item] = (item, n_rmat, n_uidx, n_iidx)
+            item_neighborhoods[item] = (n_iidx.get_loc(item), n_rmat, n_uidx, n_iidx)
 
         # Optimize each item independently on different threads using joblib
-        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, item, rmat) for item in range(rmat.ncols)) #(item, n_rmat, n_uidx, n_iidx) in item_neighborhoods)
+        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, key, ni_pos, n_rmat) for key, (ni_pos, n_rmat, n_uidx, n_iidx) in item_neighborhoods.items()) #(item, n_rmat, n_uidx, n_iidx) in item_neighborhoods)
         _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
 
         coeff_row = np.array([], dtype=np.int32)
         coeff_col = np.array([], dtype=np.int32)
         coeff_values = np.array([], dtype=np.float64)
 
-        for coeff_tuple in item_coeff_array_tuples:
+        for itemid, item, ncoeff_row, ncoeff_col, ncoeff_val in item_coeff_array_tuples:
+            # Retrieve the indexer for the user x k-size sparse coefficient matrix 
+            item, n_rmat, n_uidx, n_iidx = item_neighborhoods[itemid]
+
+            # Translate the coeff positions from the neighborhood to the item x item coeff matrix
+            row = iidx.get_indexer(n_iidx[ncoeff_row])
+            col = iidx.get_indexer(n_iidx[ncoeff_col])
+
             # Add coefficients with proper indexes for sparse matrix
-            coeff_row = np.append(coeff_row, coeff_tuple[1])
-            coeff_col = np.append(coeff_col, coeff_tuple[2])
-            coeff_values = np.append(coeff_values, coeff_tuple[3])
+            coeff_row = np.append(coeff_row, row)
+            coeff_col = np.append(coeff_col, col)
+            coeff_values = np.append(coeff_values, ncoeff_val)
+
+        coeff_row = np.require(coeff_row, dtype=np.int32)
+        coeff_col = np.require(coeff_col, dtype=np.int32)
+        coeff_values = np.require(coeff_values, dtype=np.float64)
 
         # Create sparse coefficient matrix
         self.coefficients_ =  CSR.from_coo(coeff_row, coeff_col, coeff_values, (len(iidx), len(iidx))).to_scipy()
