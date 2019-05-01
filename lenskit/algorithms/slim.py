@@ -336,6 +336,7 @@ class fsSLIM(Predictor):
             coeff_col = np.append(coeff_col, col)
             coeff_values = np.append(coeff_values, ncoeff_val)
 
+        _logger.info('[%s] completed unpacking %s coefficients for %s items', self._timer, len(coeff_values) rmat.ncols)
         coeff_row = np.require(coeff_row, dtype=np.int32)
         coeff_col = np.require(coeff_col, dtype=np.int32)
         coeff_values = np.require(coeff_values, dtype=np.float64)

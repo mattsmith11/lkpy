@@ -385,12 +385,6 @@ class ItemItem(Predictor, ItemNeighborhood):
         # scratch result array
         iscore = np.full(len(self.item_index_), np.nan, dtype=np.float_)
 
-        _logger.debug('model %s', self.sim_matrix_.N)
-        _logger.debug('nitems %s', len(self.item_index_))
-        _logger.debug('nrange %s', (self.min_nbrs, self.nnbrs))
-        _logger.debug('ratings %s', rate_v)
-        _logger.debug('target %s', i_pos)
-
         # now compute the predictions
         iscore = self._predict_agg(self.sim_matrix_.N,
                                    len(self.item_index_),
@@ -402,12 +396,8 @@ class ItemItem(Predictor, ItemNeighborhood):
             iscore += self.item_means_
         assert np.sum(np.logical_not(np.isnan(iscore))) == nscored
 
-#        _logger.debug('iscore %s', iscore)
-
         results = pd.Series(iscore, index=self.item_index_)
         results = results.sort_values(ascending=False).head(k)
-
-#        _logger.debug('results %s', results.head())
 
         return results
 
