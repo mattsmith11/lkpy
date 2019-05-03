@@ -248,7 +248,7 @@ class fsSLIM(Predictor):
         selector(ItemNeighborhoodSelector)
     """
 
-    def __init__(self, regularization=(1.0, 2.0), k=100, selector=item_knn.ItemItem(100, 100, save_nbrs=100), binary=False, max_iter=1000, nprocs=1):
+    def __init__(self, regularization=(1.0, 2.0), k=100, selector=item_knn.ItemItem(100, save_nbrs=100), binary=False, max_iter=1000, nprocs=1):
         if isinstance(regularization, tuple):
             self.regularization = regularization
             self.l_1_regularization, self.l_2_regularization = regularization
@@ -303,40 +303,23 @@ class fsSLIM(Predictor):
         
         rmat, uidx, iidx = sparse_ratings(data)
 
-        item_neighborhoods = {}
-        for item in iidx:
-            item_neighbors = self.selector.item_neighborhood(item, self.k)
-            if len(item_neighbors) != self.k:
-                _logger.warn('For item %s neighbor selector generated a neighborhood of size %s instead of %s', item, len(item_neighbors), self.k)
-
-            neighbor_ratings = data.loc[~data['item'].isin(item_neighbors)]
-
-            n_rmat, n_uidx, n_iidx = sparse_ratings(neighbor_ratings)
-
-            item_neighborhoods[item] = (n_iidx.get_loc(item), n_rmat, n_uidx, n_iidx)
-
         # Optimize each item independently on different threads using joblib
-        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(_train_item)(self, key, ni_pos, n_rmat) for key, (ni_pos, n_rmat, n_uidx, n_iidx) in item_neighborhoods.items()) #(item, n_rmat, n_uidx, n_iidx) in item_neighborhoods)
+        item_coeff_array_tuples = Parallel(n_jobs=self.nprocs)(delayed(self._fs_train_item)(item, iidx, data) for item in iidx.values) 
+
         _logger.info('[%s] completed calculating coefficients for %s items', self._timer, rmat.ncols)
 
         coeff_row = np.array([], dtype=np.int32)
         coeff_col = np.array([], dtype=np.int32)
         coeff_values = np.array([], dtype=np.float64)
 
-        for itemid, item, ncoeff_row, ncoeff_col, ncoeff_val in item_coeff_array_tuples:
-            # Retrieve the indexer for the user x k-size sparse coefficient matrix 
-            item, n_rmat, n_uidx, n_iidx = item_neighborhoods[itemid]
-
-            # Translate the coeff positions from the neighborhood to the item x item coeff matrix
-            row = iidx.get_indexer(n_iidx[ncoeff_row])
-            col = iidx.get_indexer(n_iidx[ncoeff_col])
+        for itemid, i_pos, ncoeff_row, ncoeff_col, ncoeff_val in item_coeff_array_tuples:
 
             # Add coefficients with proper indexes for sparse matrix
-            coeff_row = np.append(coeff_row, row)
-            coeff_col = np.append(coeff_col, col)
+            coeff_row = np.append(coeff_row, ncoeff_row)
+            coeff_col = np.append(coeff_col, ncoeff_col)
             coeff_values = np.append(coeff_values, ncoeff_val)
 
-        _logger.info('[%s] completed unpacking %s coefficients for %s items', self._timer, len(coeff_values) rmat.ncols)
+        _logger.info('[%s] completed unpacking %s coefficients for %s items', self._timer, len(coeff_values), rmat.ncols)
         coeff_row = np.require(coeff_row, dtype=np.int32)
         coeff_col = np.require(coeff_col, dtype=np.int32)
         coeff_values = np.require(coeff_values, dtype=np.float64)
@@ -349,6 +332,34 @@ class fsSLIM(Predictor):
         self.ratings_matrix_ = rmat
 
         return self
+
+    def _fs_train_item(self, item, iidx, data):
+        item_neighbors = self.selector.item_neighborhood(item, self.k)
+        item_neighbors = item_neighbors.rename('neighbor_score')
+        if len(item_neighbors) != self.k:
+            _logger.warn('For item %s neighbor selector generated a neighborhood of size %s instead of %s', item, len(item_neighbors), self.k)
+
+        if item not in item_neighbors.index:
+            item_neighbors = item_neighbors.add(pd.Series([5], index=[item], name='neighbor_score'))
+
+        _logger.info('Test %s item_neighbors', item_neighbors)
+
+        neighbor_ratings = data.join(item_neighbors, on='item', how='inner')
+
+        _logger.info('Test %s n ratings', neighbor_ratings)
+
+        assert len(neighbor_ratings['item'].unique()) == len(item_neighbors)
+
+        n_rmat, n_uidx, n_iidx = sparse_ratings(neighbor_ratings)
+
+        itemid, n_i_pos, n_coeff_row, n_coeff_col, n_coeff_val = _train_item(self, item, n_iidx.get_loc(item), n_rmat)
+
+        # Translate the coeff positions from the neighborhood to the item x item coeff matrix
+        coeff_row = iidx.get_indexer(n_iidx[n_coeff_row])
+        coeff_col = iidx.get_indexer(n_iidx[n_coeff_col])
+        coeff_values = n_coeff_val
+
+        return (item, item,  coeff_row, coeff_col, coeff_values)
 
     def predict_for_user(self, user, items=None, ratings=None):
         """
